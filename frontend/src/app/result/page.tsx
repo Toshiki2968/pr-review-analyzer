@@ -9,16 +9,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useSearchParams, useRouter } from "next/navigation";
-
-const data = [
-  { name: "命名", value: 14 },
-  { name: "可読性", value: 10 },
-  { name: "関数の構造", value: 7 },
-  { name: "コメント不足", value: 5 },
-  { name: "型 / エラーハンドリング", value: 3 },
-  { name: "セキュリティ", value: 2 },
-  { name: "その他", value: 1 },
-];
+import { useEffect, useState } from "react";
 
 const COLORS = [
   "#8884d8",
@@ -30,32 +21,92 @@ const COLORS = [
   "#d0ed57",
 ];
 
+type CategoryData = {
+  name: string;
+  value: number;
+};
+
+type AnalysisResult = {
+  username: string;
+  totalReviews: number;
+  avgComment: number;
+  avgResponseTime: number;
+  categories: Record<string, number>;
+};
+
 export default function ResultPage() {
   const searchParams = useSearchParams();
   const username = searchParams.get("username") || "Toshiki2968";
   const router = useRouter();
 
+  const [data, setData] = useState<AnalysisResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    setLoading(true);
+    fetch(`/api/analyze?username=${username}`)
+      .then((res) => {
+        if (!res.ok) throw new Error("API error");
+        return res.json();
+      })
+      .then(setData)
+      .catch((err) => {
+        setError(err.message);
+      })
+      .finally(() => setLoading(false));
+  }, [username]);
+
+  if (loading) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <p>分析中...</p>
+      </main>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <div>
+          <p className="text-red-600">エラーが発生しました: {error}</p>
+          <button
+            onClick={() => router.push("/")}
+            className="mt-4 bg-gray-200 hover:bg-gray-300 text-gray-800 py-2 px-4 rounded"
+          >
+            戻る
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  const chartData: CategoryData[] = Object.entries(data.categories).map(
+    ([name, value]) => ({
+      name,
+      value,
+    })
+  );
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
       <div className="bg-white shadow-md rounded-xl p-8 max-w-md w-full">
         <h2 className="text-xl font-bold text-gray-800 mb-4">
-          {username} の分析結果
+          {data.username} の分析結果
         </h2>
 
-        {/* 基本統計 */}
         <ul className="text-gray-700 text-sm space-y-2 mb-6">
           <li>
-            ✅ レビュー件数（過去30日）: <strong>42</strong>
+            ✅ レビュー件数（過去30日）: <strong>{data.totalReviews}</strong>
           </li>
           <li>
-            💬 平均コメント数: <strong>5.3</strong>
+            💬 平均コメント数: <strong>{data.avgComment}</strong>
           </li>
           <li>
-            ⏱️ 平均レビュー応答時間: <strong>2.1時間</strong>
+            ⏱️ 平均レビュー応答時間: <strong>{data.avgResponseTime}時間</strong>
           </li>
         </ul>
 
-        {/* チャート */}
         <div className="mb-6">
           <h3 className="text-lg font-semibold text-gray-800 mb-2">
             📊 カテゴリ別レビュー傾向
@@ -64,14 +115,14 @@ export default function ResultPage() {
             <ResponsiveContainer>
               <PieChart>
                 <Pie
-                  data={data}
+                  data={chartData}
                   cx="50%"
                   cy="50%"
                   outerRadius={80}
                   label
                   dataKey="value"
                 >
-                  {data.map((entry, index) => (
+                  {chartData.map((entry, index) => (
                     <Cell
                       key={`cell-${index}`}
                       fill={COLORS[index % COLORS.length]}
